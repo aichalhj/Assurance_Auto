@@ -7,7 +7,6 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 import statsmodels.api as sm
 import statsmodels.formula.api as smf
-from sklearn.datasets import fetch_openml
 
 # -----------------------------
 # CONFIGURATION PAGE
@@ -17,12 +16,13 @@ st.set_page_config(page_title="Tarification Automobile", layout="wide")
 # -----------------------------
 # CHARGEMENT DES DONNÉES
 # -----------------------------
-# On cache les données mais on évite le cache pour fetch_openml trop lourd
 @st.cache_data
 def load_data():
-    st.text("Téléchargement des données...")
-    freq = fetch_openml("freMTPL2freq", version=1, as_frame=True).frame
-    sev = fetch_openml("freMTPL2sev", version=1, as_frame=True).frame
+    st.text("Chargement des données depuis CSV...")
+    # Lecture des fichiers CSV pré-téléchargés
+    freq = pd.read_csv("freMTPL2freq.csv")
+    sev = pd.read_csv("freMTPL2sev.csv")
+
     data = freq.merge(
         sev.groupby("IDpol")["ClaimAmount"].sum().reset_index(),
         on="IDpol", how="left"
@@ -31,7 +31,7 @@ def load_data():
     data["ClaimFrequency"] = data["ClaimNb"] / data["Exposure"]
     data["Severity"] = np.where(data["ClaimNb"] > 0, data["ClaimAmount"] / data["ClaimNb"], 0)
     data["Exposure"] = data["Exposure"].replace(0, 1e-6)
-    st.text(f"Données chargées: {data.shape[0]} lignes")
+    # st.text(f"Données chargées: {data.shape[0]} lignes")
     return data
 
 data = load_data()
@@ -65,14 +65,11 @@ if menu == "Menu principal":
     st.markdown(
         """
         Pour cette étude, nous utilisons les jeux de données simulées **freMTPL2freq** et **freMTPL2sev**, très utilisés en actuariat automobile.  
-        Ils contiennent les caractéristiques des véhicules, la période d'exposition des contrats (par exemple, 100 jours correspondent à 100/365 ≈ 0,27 année), et les informations sur les conducteurs (âge, bonus-malus, etc.).  
-        Ces données servent de base à toutes les analyses.
+        Ils contiennent les caractéristiques des véhicules, la période d'exposition des contrats et les informations sur les conducteurs.  
 
         L’application propose deux grandes parties :  
-
-        - **Analyse exploratoire** : permet d’observer la fréquence et le montant des sinistres selon différents critères (région, véhicule, carburant, etc.) grâce à une interface interactive.  
-
-        - **Modélisation & Simulation** : le modèle fonctionne en arrière-plan. L’utilisateur peut saisir les caractéristiques du conducteur, du véhicule, le bonus-malus, ainsi que la zone géographique et la densité. L’application fournit alors l’estimation de la fréquence des sinistres et du montant attendu pour ce contrat.
+        - **Analyse exploratoire**  
+        - **Modélisation & Simulation**  
 
         Utilisez le menu à gauche pour naviguer entre les sections.
         """,
@@ -87,8 +84,6 @@ elif menu == "Analyse exploratoire":
     st.markdown("Explorez les données selon différents filtres.")
 
     st.sidebar.markdown("### Filtres")
-
-    # Sliders numériques
     vehage_min, vehage_max = st.sidebar.slider(
         "Âge du véhicule", int(data["VehAge"].min()), int(data["VehAge"].max()),
         (int(data["VehAge"].min()), int(data["VehAge"].max()))
@@ -107,15 +102,11 @@ elif menu == "Analyse exploratoire":
         return re.sub(r"\W+", "_", f"{column}_{val}")
 
     def n_columns_for(n_items):
-        if n_items > 40:
-            return 4
-        elif n_items > 20:
-            return 3
-        elif n_items > 8:
-            return 2
+        if n_items > 40: return 4
+        elif n_items > 20: return 3
+        elif n_items > 8: return 2
         return 1
 
-    # Checkboxes catégorielles
     def checkbox_grid_filter(column, label):
         values = sorted(data[column].astype(str).unique())
         ncols = n_columns_for(len(values))
@@ -124,7 +115,6 @@ elif menu == "Analyse exploratoire":
                 key = safe_key(column, val)
                 if key not in st.session_state:
                     st.session_state[key] = True 
-
             c1, c2 = st.columns(2)
             with c1:
                 if st.button(f"Tout sélectionner", key=f"select_all_{column}"):
@@ -134,7 +124,6 @@ elif menu == "Analyse exploratoire":
                 if st.button(f"Tout désélectionner", key=f"clear_all_{column}"):
                     for val in values:
                         st.session_state[safe_key(column, val)] = False
-
             cols = st.columns(ncols)
             for idx, val in enumerate(values):
                 key = safe_key(column, val)
@@ -142,7 +131,6 @@ elif menu == "Analyse exploratoire":
                 with cols[col_idx]:
                     checked = st.session_state.get(key, True)
                     st.checkbox(str(val), key=key, value=checked)
-
         return [val for val in values if st.session_state.get(safe_key(column, val), False)]
 
     region_filter = checkbox_grid_filter("Region", "Région")
@@ -150,7 +138,6 @@ elif menu == "Analyse exploratoire":
     gas_filter = checkbox_grid_filter("VehGas", "Type de carburant")
     area_filter = checkbox_grid_filter("Area", "Zone")
 
-    # Filtrage effectif
     filtered_data = data[
         (data["VehAge"].between(vehage_min, vehage_max)) &
         (data["DrivAge"].between(drivage_min, drivage_max)) &
@@ -196,6 +183,7 @@ elif menu == "Analyse exploratoire":
     else:
         st.info("Aucune donnée à afficher pour les montants (vérifiez vos filtres).")
 
+
     st.subheader("Distribution du nombre de sinistres")
     if not filtered_data.empty:
         fig, ax = plt.subplots()
@@ -236,7 +224,9 @@ elif menu == "Modélisation & Simulation":
     st.title("Modélisation & Estimation de la Prime Pure")
     st.markdown("Testez différents paramètres pour estimer la prime pure.")
 
+    # -----------------------------
     # Création des classes
+    # -----------------------------
     bins_age = [17, 20, 30, 40, 50, 60, 70, 80, 120]
     labels_age = ['18-20', '21-30', '31-40', '41-50', '51-60', '61-70', '71-80', '81+']
     data['DrivAge_class'] = pd.cut(data['DrivAge'], bins=bins_age, labels=labels_age)
@@ -249,22 +239,31 @@ elif menu == "Modélisation & Simulation":
     ]
     data['VehPower_class'] = pd.cut(data['VehPower'], bins=bins_power, labels=labels_power)
 
-    # Fonction pour entraîner les modèles
+    # -----------------------------
+    # Fonction pour entraîner les modèles sur un échantillon
+    # -----------------------------
     @st.cache_data(show_spinner=True)
-    def train_models(data):
-        st.text("Entraînement du modèle GLM...")
+    def train_models_sample(data, sample_size=50000):
+        # Prendre un échantillon aléatoire si le dataset est trop grand
+        if data.shape[0] > sample_size:
+            data_sample = data.sample(sample_size, random_state=42)
+        else:
+            data_sample = data.copy()
+
+        # Modèle fréquence
         formula_freq = (
             "ClaimNb ~ VehPower_class + VehAge + DrivAge_class + BonusMalus + "
             "Area + VehBrand + VehGas + Density + Region"
         )
         glm_freq = smf.glm(
             formula=formula_freq,
-            data=data,
+            data=data_sample,
             family=sm.families.Poisson(),
-            offset=np.log(data["Exposure"])
+            offset=np.log(data_sample["Exposure"])
         ).fit()
 
-        data_sev = data[data["ClaimAmount"] > 0].copy()
+        # Modèle sévérité
+        data_sev = data_sample[data_sample["ClaimAmount"] > 0].copy()
         data_sev["Severity"] = data_sev["ClaimAmount"] / data_sev["ClaimNb"]
         formula_sev = (
             "Severity ~ VehPower_class + VehAge + DrivAge_class + BonusMalus + "
@@ -276,16 +275,17 @@ elif menu == "Modélisation & Simulation":
             family=sm.families.Gamma(sm.families.links.log())
         ).fit()
 
-        st.text("Modèles entraînés")
         return glm_freq, glm_sev
 
-    glm_freq, glm_sev = train_models(data)
-    st.success("Modèles prêts à l'emploi")
+    # -----------------------------
+    # Entraînement rapide sur échantillon
+    # -----------------------------
+    glm_freq, glm_sev = train_models_sample(data)
+    st.success("Modèles prêts à l'emploi (entraînés sur échantillon)")
 
     # -----------------------------
     # Interface utilisateur
     # -----------------------------
-    st.subheader("Saisissez les caractéristiques du contrat")
     col1, col2, col3 = st.columns(3)
     with col1:
         veh_age = st.slider("Âge du véhicule", 0, 20, 5)
@@ -294,7 +294,12 @@ elif menu == "Modélisation & Simulation":
     with col2:
         driv_age = st.slider("Âge du conducteur", 18, 90, 40)
         driv_age_class = pd.cut([driv_age], bins=bins_age, labels=labels_age)[0]
-        bonus_malus = st.slider("Bonus-Malus", int(data["BonusMalus"].min()), int(data["BonusMalus"].max()), int(data["BonusMalus"].min()))
+        bonus_malus = st.slider(
+            "Bonus-Malus",
+            int(data["BonusMalus"].min()),
+            int(data["BonusMalus"].max()),
+            int(data["BonusMalus"].min())
+        )
         veh_gas = st.selectbox("Type de carburant", sorted(data["VehGas"].unique()))
     with col3:
         area = st.selectbox("Zone", sorted(data["Area"].unique()))
@@ -303,7 +308,7 @@ elif menu == "Modélisation & Simulation":
         exposure = st.number_input("Durée d’exposition (années)", 0.0, 1.0, 1.0, 0.1)
 
     # -----------------------------
-    # Création du dataframe du contrat
+    # Prédictions
     # -----------------------------
     contract = pd.DataFrame({
         "VehPower_class": [veh_power_class],
@@ -318,16 +323,10 @@ elif menu == "Modélisation & Simulation":
         "Exposure": [exposure]
     })
 
-    # -----------------------------
-    # Prédictions
-    # -----------------------------
     contract["ExpectedClaims"] = glm_freq.predict(contract)
     contract["ExpectedSeverity"] = glm_sev.predict(contract)
     contract["PurePremium"] = contract["ExpectedClaims"] * contract["ExpectedSeverity"]
 
-    # -----------------------------
-    # Affichage des résultats
-    # -----------------------------
     st.markdown("---")
     st.subheader("Résultats de la simulation")
     st.write(f"""
@@ -336,5 +335,4 @@ elif menu == "Modélisation & Simulation":
     - **Prime pure estimée (€ / an)** : **{contract['PurePremium'].iloc[0]:,.0f} €**
     """)
 
-    # Barre de progression basée sur la prime pure 
     st.progress(min(contract["PurePremium"].iloc[0] / 2000, 1.0))
