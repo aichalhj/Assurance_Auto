@@ -62,18 +62,21 @@ menu = st.sidebar.radio(
 if menu == "Menu principal":
     st.title("Tarification Automobile")
     st.markdown(
-        """
-        Pour cette étude, nous utilisons les jeux de données simulées **freMTPL2freq** et **freMTPL2sev**, très utilisés en actuariat automobile.  
-        Ils contiennent les caractéristiques des véhicules, la période d'exposition des contrats et les informations sur les conducteurs.  
+    """
+    Pour cette étude, nous utilisons les jeux de données **freMTPL2freq** et **freMTPL2sev**, très utilisés en actuariat automobile.  
+    Ils contiennent les caractéristiques des véhicules, la période d'exposition des contrats (par exemple, 100 jours correspondent à 100/365 ≈ 0,27 année), et les informations sur les conducteurs (âge, bonus-malus, etc.).  
+    Ces données servent de base à toutes les analyses.
 
-        L’application propose deux grandes parties :  
-        - **Analyse exploratoire**  
-        - **Modélisation & Simulation**  
+    L’application propose deux grandes parties :  
 
-        Utilisez le menu à gauche pour naviguer entre les sections.
-        """,
-        unsafe_allow_html=True
-    )
+    - **Analyse exploratoire** : permet d’observer la fréquence et le montant des sinistres selon différents critères (région, véhicule, carburant, etc.) grâce à une interface interactive.  
+
+    - **Modélisation & Simulation** : le modèle fonctionne en arrière-plan. L’utilisateur peut saisir les caractéristiques du conducteur, du véhicule, le bonus-malus, ainsi que la zone géographique et la densité. L’application fournit alors l’estimation de la fréquence des sinistres et du montant attendu pour ce contrat.
+
+    👉 Utilisez le menu à gauche pour naviguer entre les sections.
+    """,
+    unsafe_allow_html=True
+)
 
 # =============================================================================
 # PAGE 2 : ANALYSE EXPLORATOIRE
