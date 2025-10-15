@@ -18,7 +18,6 @@ st.set_page_config(page_title="Tarification Automobile", layout="wide")
 # -----------------------------
 @st.cache_data
 def load_data():
-    st.text("Chargement des données depuis CSV...")
     # Lecture des fichiers CSV pré-téléchargés
     freq = pd.read_csv("freMTPL2freq.csv")
     sev = pd.read_csv("freMTPL2sev.csv")
