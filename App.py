@@ -73,7 +73,7 @@ if menu == "Menu principal":
 
     - **Modélisation & Simulation** : le modèle fonctionne en arrière-plan. L’utilisateur peut saisir les caractéristiques du conducteur, du véhicule, le bonus-malus, ainsi que la zone géographique et la densité. L’application fournit alors l’estimation de la fréquence des sinistres et du montant attendu pour ce contrat.
 
-    👉 Utilisez le menu à gauche pour naviguer entre les sections.
+    Utilisez le menu à gauche pour naviguer entre les sections.
     """,
     unsafe_allow_html=True
 )
