@@ -17,8 +17,10 @@ st.set_page_config(page_title="Tarification Automobile", layout="wide")
 # -----------------------------
 # CHARGEMENT DES DONNÉES
 # -----------------------------
+# On cache les données mais on évite le cache pour fetch_openml trop lourd
 @st.cache_data
 def load_data():
+    st.text("Téléchargement des données...")
     freq = fetch_openml("freMTPL2freq", version=1, as_frame=True).frame
     sev = fetch_openml("freMTPL2sev", version=1, as_frame=True).frame
     data = freq.merge(
@@ -29,6 +31,7 @@ def load_data():
     data["ClaimFrequency"] = data["ClaimNb"] / data["Exposure"]
     data["Severity"] = np.where(data["ClaimNb"] > 0, data["ClaimAmount"] / data["ClaimNb"], 0)
     data["Exposure"] = data["Exposure"].replace(0, 1e-6)
+    st.text(f"Données chargées: {data.shape[0]} lignes")
     return data
 
 data = load_data()
@@ -60,21 +63,21 @@ menu = st.sidebar.radio(
 if menu == "Menu principal":
     st.title("Tarification Automobile")
     st.markdown(
-    """
-    Pour cette étude, nous utilisons les jeux de données simulées **freMTPL2freq** et **freMTPL2sev**, très utilisés en actuariat automobile.  
-    Ils contiennent les caractéristiques des véhicules, la période d'exposition des contrats (par exemple, 100 jours correspondent à 100/365 ≈ 0,27 année), et les informations sur les conducteurs (âge, bonus-malus, etc.).  
-    Ces données servent de base à toutes les analyses.
+        """
+        Pour cette étude, nous utilisons les jeux de données simulées **freMTPL2freq** et **freMTPL2sev**, très utilisés en actuariat automobile.  
+        Ils contiennent les caractéristiques des véhicules, la période d'exposition des contrats (par exemple, 100 jours correspondent à 100/365 ≈ 0,27 année), et les informations sur les conducteurs (âge, bonus-malus, etc.).  
+        Ces données servent de base à toutes les analyses.
 
-    L’application propose deux grandes parties :  
+        L’application propose deux grandes parties :  
 
-    - **Analyse exploratoire** : permet d’observer la fréquence et le montant des sinistres selon différents critères (région, véhicule, carburant, etc.) grâce à une interface interactive.  
+        - **Analyse exploratoire** : permet d’observer la fréquence et le montant des sinistres selon différents critères (région, véhicule, carburant, etc.) grâce à une interface interactive.  
 
-    - **Modélisation & Simulation** : le modèle fonctionne en arrière-plan. L’utilisateur peut saisir les caractéristiques du conducteur, du véhicule, le bonus-malus, ainsi que la zone géographique et la densité. L’application fournit alors l’estimation de la fréquence des sinistres et du montant attendu pour ce contrat.
+        - **Modélisation & Simulation** : le modèle fonctionne en arrière-plan. L’utilisateur peut saisir les caractéristiques du conducteur, du véhicule, le bonus-malus, ainsi que la zone géographique et la densité. L’application fournit alors l’estimation de la fréquence des sinistres et du montant attendu pour ce contrat.
 
-    Utilisez le menu à gauche pour naviguer entre les sections.
-    """,
-    unsafe_allow_html=True
-)
+        Utilisez le menu à gauche pour naviguer entre les sections.
+        """,
+        unsafe_allow_html=True
+    )
 
 # =============================================================================
 # PAGE 2 : ANALYSE EXPLORATOIRE
@@ -120,7 +123,7 @@ elif menu == "Analyse exploratoire":
             for val in values:
                 key = safe_key(column, val)
                 if key not in st.session_state:
-                    st.session_state[key] = True  # initialisation par défaut
+                    st.session_state[key] = True 
 
             c1, c2 = st.columns(2)
             with c1:
@@ -147,9 +150,7 @@ elif menu == "Analyse exploratoire":
     gas_filter = checkbox_grid_filter("VehGas", "Type de carburant")
     area_filter = checkbox_grid_filter("Area", "Zone")
 
-    # -----------------------------
     # Filtrage effectif
-    # -----------------------------
     filtered_data = data[
         (data["VehAge"].between(vehage_min, vehage_max)) &
         (data["DrivAge"].between(drivage_min, drivage_max)) &
@@ -162,9 +163,7 @@ elif menu == "Analyse exploratoire":
 
     st.markdown(f"**Nombre de contrats sélectionnés : {filtered_data.shape[0]:,}**".replace(",", " "))
 
-    # -----------------------------
     # KPIs
-    # -----------------------------
     st.subheader("Chiffres clés")
     total_claims = filtered_data["ClaimAmount"].sum() if not filtered_data.empty else 0
     total_nb_claims = filtered_data["ClaimNb"].sum() if not filtered_data.empty else 0
@@ -178,9 +177,7 @@ elif menu == "Analyse exploratoire":
     col4.metric("Nombre total de sinistres", f"{int(total_nb_claims):,}".replace(",", " "))
     col5.metric("Montant total des sinistres (€)", f"{total_claims:,.0f}".replace(",", " "))
 
-    # -----------------------------
     # Graphiques
-    # -----------------------------
     st.subheader("Distribution des montants de sinistres")
     if not filtered_data.empty and (filtered_data["ClaimAmount"] > 0).any():
         fig, ax = plt.subplots()
@@ -199,7 +196,7 @@ elif menu == "Analyse exploratoire":
     else:
         st.info("Aucune donnée à afficher pour les montants (vérifiez vos filtres).")
 
-    st.subheader("Distribution du nombre de sinistres (ClaimNb)")
+    st.subheader("Distribution du nombre de sinistres")
     if not filtered_data.empty:
         fig, ax = plt.subplots()
         sns.countplot(
@@ -232,7 +229,6 @@ elif menu == "Analyse exploratoire":
         plt.xticks(rotation=45)
         st.pyplot(fig)
 
-
 # =============================================================================
 # PAGE 3 : MODELISATION
 # =============================================================================
@@ -240,9 +236,7 @@ elif menu == "Modélisation & Simulation":
     st.title("Modélisation & Estimation de la Prime Pure")
     st.markdown("Testez différents paramètres pour estimer la prime pure.")
 
-    # -----------------------------
     # Création des classes
-    # -----------------------------
     bins_age = [17, 20, 30, 40, 50, 60, 70, 80, 120]
     labels_age = ['18-20', '21-30', '31-40', '41-50', '51-60', '61-70', '71-80', '81+']
     data['DrivAge_class'] = pd.cut(data['DrivAge'], bins=bins_age, labels=labels_age)
@@ -255,11 +249,10 @@ elif menu == "Modélisation & Simulation":
     ]
     data['VehPower_class'] = pd.cut(data['VehPower'], bins=bins_power, labels=labels_power)
 
-    # -----------------------------
     # Fonction pour entraîner les modèles
-    # -----------------------------
-    @st.cache_resource
+    @st.cache_data(show_spinner=True)
     def train_models(data):
+        st.text("Entraînement du modèle GLM...")
         formula_freq = (
             "ClaimNb ~ VehPower_class + VehAge + DrivAge_class + BonusMalus + "
             "Area + VehBrand + VehGas + Density + Region"
@@ -283,6 +276,7 @@ elif menu == "Modélisation & Simulation":
             family=sm.families.Gamma(sm.families.links.log())
         ).fit()
 
+        st.text("Modèles entraînés")
         return glm_freq, glm_sev
 
     glm_freq, glm_sev = train_models(data)
@@ -300,7 +294,7 @@ elif menu == "Modélisation & Simulation":
     with col2:
         driv_age = st.slider("Âge du conducteur", 18, 90, 40)
         driv_age_class = pd.cut([driv_age], bins=bins_age, labels=labels_age)[0]
-        bonus_malus = st.slider("Bonus-Malus", int(data["BonusMalus"].min()), int(data["BonusMalus"].max()), 100)
+        bonus_malus = st.slider("Bonus-Malus", int(data["BonusMalus"].min()), int(data["BonusMalus"].max()), int(data["BonusMalus"].min()))
         veh_gas = st.selectbox("Type de carburant", sorted(data["VehGas"].unique()))
     with col3:
         area = st.selectbox("Zone", sorted(data["Area"].unique()))
@@ -344,4 +338,3 @@ elif menu == "Modélisation & Simulation":
 
     # Barre de progression basée sur la prime pure 
     st.progress(min(contract["PurePremium"].iloc[0] / 2000, 1.0))
-
