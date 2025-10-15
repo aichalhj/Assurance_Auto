@@ -1,7 +1,5 @@
 # app.py
 import re
-import os
-import joblib
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -63,7 +61,7 @@ if menu == "Menu principal":
     st.title("Tarification Automobile")
     st.markdown(
     """
-    Pour cette étude, nous utilisons les jeux de données **freMTPL2freq** et **freMTPL2sev**, très utilisés en actuariat automobile.  
+    Pour cette étude, nous utilisons les jeux de données simulées **freMTPL2freq** et **freMTPL2sev**, très utilisés en actuariat automobile.  
     Ils contiennent les caractéristiques des véhicules, la période d'exposition des contrats (par exemple, 100 jours correspondent à 100/365 ≈ 0,27 année), et les informations sur les conducteurs (âge, bonus-malus, etc.).  
     Ces données servent de base à toutes les analyses.
 
@@ -87,6 +85,7 @@ elif menu == "Analyse exploratoire":
 
     st.sidebar.markdown("### Filtres")
 
+    # Sliders numériques
     vehage_min, vehage_max = st.sidebar.slider(
         "Âge du véhicule", int(data["VehAge"].min()), int(data["VehAge"].max()),
         (int(data["VehAge"].min()), int(data["VehAge"].max()))
@@ -113,20 +112,15 @@ elif menu == "Analyse exploratoire":
             return 2
         return 1
 
-    if "reset_filters" not in st.session_state:
-        st.session_state["reset_filters"] = False
-
-    if st.sidebar.button("Réinitialiser tous les filtres"):
-        st.session_state["reset_filters"] = True
-
+    # Checkboxes catégorielles
     def checkbox_grid_filter(column, label):
         values = sorted(data[column].astype(str).unique())
         ncols = n_columns_for(len(values))
         with st.sidebar.expander(label, expanded=False):
             for val in values:
                 key = safe_key(column, val)
-                if key not in st.session_state or st.session_state["reset_filters"]:
-                    st.session_state[key] = True
+                if key not in st.session_state:
+                    st.session_state[key] = True  # initialisation par défaut
 
             c1, c2 = st.columns(2)
             with c1:
@@ -138,7 +132,6 @@ elif menu == "Analyse exploratoire":
                     for val in values:
                         st.session_state[safe_key(column, val)] = False
 
-            st.markdown("")
             cols = st.columns(ncols)
             for idx, val in enumerate(values):
                 key = safe_key(column, val)
@@ -146,7 +139,7 @@ elif menu == "Analyse exploratoire":
                 with cols[col_idx]:
                     checked = st.session_state.get(key, True)
                     st.checkbox(str(val), key=key, value=checked)
-        st.session_state["reset_filters"] = False
+
         return [val for val in values if st.session_state.get(safe_key(column, val), False)]
 
     region_filter = checkbox_grid_filter("Region", "Région")
@@ -168,6 +161,7 @@ elif menu == "Analyse exploratoire":
     ].copy()
 
     st.markdown(f"**Nombre de contrats sélectionnés : {filtered_data.shape[0]:,}**".replace(",", " "))
+
     # -----------------------------
     # KPIs
     # -----------------------------
@@ -183,7 +177,6 @@ elif menu == "Analyse exploratoire":
     col3.metric("Sévérité moyenne (€)", f"{avg_sev:,.0f}".replace(",", " "))
     col4.metric("Nombre total de sinistres", f"{int(total_nb_claims):,}".replace(",", " "))
     col5.metric("Montant total des sinistres (€)", f"{total_claims:,.0f}".replace(",", " "))
-
 
     # -----------------------------
     # Graphiques
@@ -239,6 +232,7 @@ elif menu == "Analyse exploratoire":
         plt.xticks(rotation=45)
         st.pyplot(fig)
 
+
 # =============================================================================
 # PAGE 3 : MODELISATION
 # =============================================================================
@@ -261,43 +255,37 @@ elif menu == "Modélisation & Simulation":
     ]
     data['VehPower_class'] = pd.cut(data['VehPower'], bins=bins_power, labels=labels_power)
 
+    # -----------------------------
+    # Fonction pour entraîner les modèles
+    # -----------------------------
     @st.cache_resource
-    def load_or_train_models(data):
-        model_freq_path = "glm_freq.pkl"
-        model_sev_path = "glm_sev.pkl"
-        if os.path.exists(model_freq_path) and os.path.exists(model_sev_path):
-            glm_freq = joblib.load(model_freq_path)
-            glm_sev = joblib.load(model_sev_path)
-            return glm_freq, glm_sev
-        else:
-            formula_freq = (
-                "ClaimNb ~ VehPower_class + VehAge + DrivAge_class + BonusMalus + "
-                "Area + VehBrand + VehGas + Density + Region"
-            )
-            glm_freq = smf.glm(
-                formula=formula_freq,
-                data=data,
-                family=sm.families.Poisson(),
-                offset=np.log(data["Exposure"])
-            ).fit()
+    def train_models(data):
+        formula_freq = (
+            "ClaimNb ~ VehPower_class + VehAge + DrivAge_class + BonusMalus + "
+            "Area + VehBrand + VehGas + Density + Region"
+        )
+        glm_freq = smf.glm(
+            formula=formula_freq,
+            data=data,
+            family=sm.families.Poisson(),
+            offset=np.log(data["Exposure"])
+        ).fit()
 
-            data_sev = data[data["ClaimAmount"] > 0].copy()
-            data_sev["Severity"] = data_sev["ClaimAmount"] / data_sev["ClaimNb"]
-            formula_sev = (
-                "Severity ~ VehPower_class + VehAge + DrivAge_class + BonusMalus + "
-                "Area + VehBrand + VehGas + Density + Region"
-            )
-            glm_sev = smf.glm(
-                formula=formula_sev,
-                data=data_sev,
-                family=sm.families.Gamma(sm.families.links.log())
-            ).fit()
+        data_sev = data[data["ClaimAmount"] > 0].copy()
+        data_sev["Severity"] = data_sev["ClaimAmount"] / data_sev["ClaimNb"]
+        formula_sev = (
+            "Severity ~ VehPower_class + VehAge + DrivAge_class + BonusMalus + "
+            "Area + VehBrand + VehGas + Density + Region"
+        )
+        glm_sev = smf.glm(
+            formula=formula_sev,
+            data=data_sev,
+            family=sm.families.Gamma(sm.families.links.log())
+        ).fit()
 
-            joblib.dump(glm_freq, model_freq_path)
-            joblib.dump(glm_sev, model_sev_path)
-            return glm_freq, glm_sev
+        return glm_freq, glm_sev
 
-    glm_freq, glm_sev = load_or_train_models(data)
+    glm_freq, glm_sev = train_models(data)
     st.success("Modèles prêts à l'emploi")
 
     # -----------------------------
@@ -320,6 +308,9 @@ elif menu == "Modélisation & Simulation":
         density = st.number_input("Densité (hab/km²)", 0, 50000, 3000)
         exposure = st.number_input("Durée d’exposition (années)", 0.0, 1.0, 1.0, 0.1)
 
+    # -----------------------------
+    # Création du dataframe du contrat
+    # -----------------------------
     contract = pd.DataFrame({
         "VehPower_class": [veh_power_class],
         "VehAge": [veh_age],
@@ -333,10 +324,16 @@ elif menu == "Modélisation & Simulation":
         "Exposure": [exposure]
     })
 
+    # -----------------------------
+    # Prédictions
+    # -----------------------------
     contract["ExpectedClaims"] = glm_freq.predict(contract)
     contract["ExpectedSeverity"] = glm_sev.predict(contract)
     contract["PurePremium"] = contract["ExpectedClaims"] * contract["ExpectedSeverity"]
 
+    # -----------------------------
+    # Affichage des résultats
+    # -----------------------------
     st.markdown("---")
     st.subheader("Résultats de la simulation")
     st.write(f"""
@@ -344,5 +341,7 @@ elif menu == "Modélisation & Simulation":
     - **Sévérité attendue (€ / sinistre)** : {contract['ExpectedSeverity'].iloc[0]:,.0f} €  
     - **Prime pure estimée (€ / an)** : **{contract['PurePremium'].iloc[0]:,.0f} €**
     """)
+
+    # Barre de progression basée sur la prime pure 
     st.progress(min(contract["PurePremium"].iloc[0] / 2000, 1.0))
 
