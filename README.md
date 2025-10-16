@@ -1,7 +1,3 @@
----
-title: "Tarification Automobile"
----
-
 # Tarification Automobile
 
 Ce projet est une application **Streamlit** permettant d’analyser et de simuler la prime d’assurance automobile à partir des jeux de données simulées **freMTPL2freq** et **freMTPL2sev**, très utilisés en actuariat automobile.  
@@ -37,6 +33,7 @@ git clone https://github.com/aichalhj/Assurance_Auto.git
 cd Assurance_Auto
 pip install -r requirements.txt
 streamlit run App.py
+
 
 
 
